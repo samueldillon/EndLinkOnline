@@ -192,7 +192,7 @@
     display:flex; align-items:center; gap:6px; padding:8px; flex-wrap:wrap;
     background:var(--panel-2); position:relative;
   }
-  .builder-row.empty::before{ content:"Tap letters below or the Core Card, to build your word"; color:var(--text-muted); font-size:12px; font-family:'Nunito',sans-serif; font-weight:600;}
+  .builder-row.empty::before{ content:"Tap letters below, then the Core Card, to build your word"; color:var(--text-muted); font-size:12px; font-family:'Nunito',sans-serif; font-weight:600;}
   .btile{
     width:44px; height:52px; border-radius:10px; background:var(--tile); color:var(--tile-ink);
     display:flex; align-items:center; justify-content:center; font-family:'Fredoka',sans-serif;
@@ -350,12 +350,12 @@ const LETTER_DISTRIBUTION = {
    technically-inclined player could still inspect it via browser dev tools.
 */
 const firebaseConfig = {
-  apiKey: "AIzaSyDfj8D_WmpZHdy6U1TWkvOsXLciUFvU1QQ",
-  authDomain: "endlinkonline.firebaseapp.com",
-  projectId: "endlinkonline",
-  storageBucket: "endlinkonline.firebasestorage.app",
-  messagingSenderId: "183476461533",
-  appId: "1:183476461533:web:14338d4e1d7eb7cead6034"
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
+  projectId: "REPLACE_WITH_YOUR_PROJECT",
+  storageBucket: "REPLACE_WITH_YOUR_PROJECT.appspot.com",
+  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
+  appId: "REPLACE_WITH_YOUR_APP_ID",
 };
 const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "REPLACE_WITH_YOUR_API_KEY";
 let db = null;
@@ -380,6 +380,7 @@ let state = {
     joinCodeInput: "",
     error: null,
     unsub: null,            // Firestore listener detach function
+    fromInvite: false,      // true if this phone opened via a shared invite link
   },
   playerCount: 2,
   names: ["Player 1","Player 2","Player 3","Player 4"],
@@ -488,6 +489,17 @@ function dealRound(){
 }
 
 /* ============================= ONLINE MULTIPLAYER ============================= */
+
+/* reads ?room=CODE from the URL, e.g. from a link the host shared */
+function getRoomCodeFromURL(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("room");
+  return code ? code.trim().toUpperCase() : null;
+}
+
+function buildInviteLink(code){
+  return window.location.origin + window.location.pathname + "?room=" + code;
+}
 
 function getClientId(){
   let id = localStorage.getItem("endlink_client_id");
@@ -643,6 +655,7 @@ function applyIncomingGame(g){
   state.core = g.core;
   state.currentPlayer = g.currentPlayer;
   state.lastRound = g.lastRound;
+  state.lastPlay = g.lastPlay || null;
   state.nextStarter = g.nextStarter;
   state.gameWinner = g.gameWinner;
 }
@@ -662,6 +675,7 @@ function syncOnline(){
       core: state.core,
       currentPlayer: state.currentPlayer,
       lastRound: state.lastRound,
+      lastPlay: state.lastPlay || null,
       nextStarter: state.nextStarter,
       gameWinner: state.gameWinner,
     },
@@ -1155,18 +1169,29 @@ function renderOnlineSetup(){
   const warn = !FIREBASE_CONFIGURED
     ? `<p style="color:var(--brick);font-weight:700;font-size:13px;margin-bottom:10px;">Firebase isn't set up yet — see the setup comment near the top of the file's &lt;script&gt; for a step-by-step walkthrough, then paste your config into firebaseConfig.</p>`
     : "";
+  const invited = state.online.fromInvite;
   app.innerHTML = `
     <div class="screen">
       <div class="wrap">
         ${miniLogo()}
         <div class="panel">
-          <h2>Play Online</h2>
+          <h2>${invited ? "Join the Game" : "Play Online"}</h2>
           ${warn}
+          ${invited ? `<p style="color:var(--text-muted);font-size:13px;font-weight:600;margin-bottom:10px;">You've been invited to room <b>${escapeHtml(state.online.joinCodeInput)}</b> — just add your name and tap Join.</p>` : ""}
           <div class="name-row">
             <div class="dot"></div>
             <input value="${escapeAttr(state.online.myName)}" placeholder="Your name" id="onlineName" class="name-input" />
           </div>
         </div>
+        <div class="panel">
+          <h2>Join a Room</h2>
+          <div class="name-row">
+            <div class="dot"></div>
+            <input value="${escapeAttr(state.online.joinCodeInput)}" placeholder="4-letter room code" id="joinCode" class="name-input" style="text-transform:uppercase;" />
+          </div>
+          <button class="btn btn-gold" id="joinBtn">Join Room</button>
+        </div>
+        ${invited ? "" : `
         <div class="panel">
           <h2>Create a Room</h2>
           <div class="stepper">
@@ -1175,16 +1200,8 @@ function renderOnlineSetup(){
             <button id="inc">+</button>
           </div>
           <p style="text-align:center;color:var(--text-muted);font-size:12px;font-weight:600;margin:6px 0 14px;">total seats (mix of people and 🤖 Computers)</p>
-          <button class="btn btn-gold" id="createBtn">Create Room</button>
-        </div>
-        <div class="panel">
-          <h2>Join a Room</h2>
-          <div class="name-row">
-            <div class="dot"></div>
-            <input value="${escapeAttr(state.online.joinCodeInput)}" placeholder="4-letter room code" id="joinCode" class="name-input" style="text-transform:uppercase;" />
-          </div>
-          <button class="btn btn-outline" id="joinBtn">Join Room</button>
-        </div>
+          <button class="btn btn-outline" id="createBtn">Create Room</button>
+        </div>`}
         ${state.online.error ? `<p style="color:var(--brick);font-weight:700;font-size:13px;text-align:center;margin-top:10px;">${escapeHtml(state.online.error)}</p>` : ""}
         <div class="rules-toggle">
           <button id="backBtn">← Back</button>
@@ -1193,12 +1210,14 @@ function renderOnlineSetup(){
     </div>
   `;
   document.getElementById("onlineName").oninput = (e)=>{ state.online.myName = e.target.value; };
-  document.getElementById("dec").onclick = ()=>{ if(state.online.maxPlayers>2){ state.online.maxPlayers--; render(); } };
-  document.getElementById("inc").onclick = ()=>{ if(state.online.maxPlayers<8){ state.online.maxPlayers++; render(); } };
-  document.getElementById("createBtn").onclick = createRoom;
   document.getElementById("joinCode").oninput = (e)=>{ state.online.joinCodeInput = e.target.value; };
   document.getElementById("joinBtn").onclick = joinRoom;
-  document.getElementById("backBtn").onclick = ()=>{ state.screen = "home"; render(); };
+  if(!invited){
+    document.getElementById("dec").onclick = ()=>{ if(state.online.maxPlayers>2){ state.online.maxPlayers--; render(); } };
+    document.getElementById("inc").onclick = ()=>{ if(state.online.maxPlayers<8){ state.online.maxPlayers++; render(); } };
+    document.getElementById("createBtn").onclick = createRoom;
+  }
+  document.getElementById("backBtn").onclick = ()=>{ state.online.fromInvite = false; state.screen = "home"; render(); };
 }
 
 function renderLobby(){
@@ -1225,7 +1244,8 @@ function renderLobby(){
         <div class="panel" style="text-align:center;">
           <h2>Room Code</h2>
           <div class="count mono" style="font-size:36px;letter-spacing:.1em;">${state.online.code||""}</div>
-          <p style="color:var(--text-muted);font-size:13px;font-weight:600;margin-top:6px;">Share this code — everyone else taps "Play Online" → "Join a Room".</p>
+          <p style="color:var(--text-muted);font-size:13px;font-weight:600;margin-top:6px;">Share this code, or send the link below — either way, new players land in this room.</p>
+          <button class="btn btn-outline" id="copyLinkBtn" style="margin-top:10px;">Copy Invite Link</button>
         </div>
         <div class="panel">
           <h2>Players</h2>
@@ -1239,6 +1259,7 @@ function renderLobby(){
         </div>
       </div>
     </div>
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
   if(state.online.isHost){
     document.querySelectorAll("[data-set-cpu]").forEach(b=>{ b.onclick = ()=>setSeatCPU(parseInt(b.dataset.setCpu), true); });
@@ -1247,6 +1268,18 @@ function renderLobby(){
     if(startBtn) startBtn.onclick = startOnlineGame;
   }
   document.getElementById("leaveBtn").onclick = leaveOnlineRoom;
+  document.getElementById("copyLinkBtn").onclick = ()=>{
+    const link = buildInviteLink(state.online.code);
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(()=>{
+        showToast("Invite link copied!");
+      }).catch(()=>{
+        window.prompt("Copy this invite link:", link);
+      });
+    } else {
+      window.prompt("Copy this invite link:", link);
+    }
+  };
 }
 
 function renderSetup(){
@@ -1581,6 +1614,15 @@ function renderOnlinePlay(){
         <div class="score-strip">${state.players.map(pl=>`<b>${escapeHtml(pl.name)}</b> ${pl.score}`).join("&nbsp;&nbsp;·&nbsp;&nbsp;")} &nbsp;<span class="mono">(race to ${WINNING_SCORE})</span></div>
         <div class="score-strip" style="margin-top:-4px;">${opponents}</div>
 
+        ${state.lastPlay ? `
+          <div class="last-play-block">
+            <div class="last-play-label">${escapeHtml(state.lastPlay.by)} played</div>
+            <div class="last-play-row">
+              ${state.lastPlay.tiles.map(t => `<div class="btile ${t.wild ? 'wild-tile' : ''} ${t.core ? 'core-tile' : ''}">${escapeHtml(t.letter)}</div>`).join("")}
+            </div>
+          </div>
+        ` : ""}
+
         <div class="core-zone">
           <div class="core-label">Core Card${isMyTurn ? " · tap to insert" : ""}</div>
           <div class="${coreClass}" id="coreCardEl" role="button">${displayLetter(state.core)}</div>
@@ -1731,6 +1773,13 @@ document.addEventListener("click", (e)=>{
 function escapeHtml(s){ return (s||"").replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function escapeAttr(s){ return escapeHtml(s); }
 
+const inviteCode = getRoomCodeFromURL();
+if(inviteCode){
+  state.mode = "online";
+  state.screen = "onlineSetup";
+  state.online.joinCodeInput = inviteCode;
+  state.online.fromInvite = true;
+}
 tryResumeSession();
 render();
 </script>
