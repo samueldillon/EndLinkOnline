@@ -192,7 +192,7 @@
     display:flex; align-items:center; gap:6px; padding:8px; flex-wrap:wrap;
     background:var(--panel-2); position:relative;
   }
-  .builder-row.empty::before{ content:"Tap letters below, then the Core Card, to build your word"; color:var(--text-muted); font-size:12px; font-family:'Nunito',sans-serif; font-weight:600;}
+  .builder-row.empty::before{ content:"Tap letters below or the Core Card, to build your word"; color:var(--text-muted); font-size:12px; font-family:'Nunito',sans-serif; font-weight:600;}
   .btile{
     width:44px; height:52px; border-radius:10px; background:var(--tile); color:var(--tile-ink);
     display:flex; align-items:center; justify-content:center; font-family:'Fredoka',sans-serif;
@@ -350,12 +350,12 @@ const LETTER_DISTRIBUTION = {
    technically-inclined player could still inspect it via browser dev tools.
 */
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_PROJECT.firebaseapp.com",
-  projectId: "REPLACE_WITH_YOUR_PROJECT",
-  storageBucket: "REPLACE_WITH_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "REPLACE_WITH_YOUR_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID",
+apiKey: "AIzaSyDfj8D_WmpZHdy6U1TWkvOsXLciUFvU1QQ",
+  authDomain: "endlinkonline.firebaseapp.com",
+  projectId: "endlinkonline",
+  storageBucket: "endlinkonline.firebasestorage.app",
+  messagingSenderId: "183476461533",
+  appId: "1:183476461533:web:14338d4e1d7eb7cead6034"
 };
 const FIREBASE_CONFIGURED = firebaseConfig.apiKey !== "REPLACE_WITH_YOUR_API_KEY";
 let db = null;
